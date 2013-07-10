@@ -38,26 +38,16 @@ var assertFileExists = function(infile) {
     return instr;
 };
 
-var cheerioHtmlFile = function(htmlfile, url, checksfile, cf) {
-    var file_content;
-    if (url == null){
-	console.log('url null');
-	file_content = fs.readFileSync(htmlfile);
-	cf(cheerio.load(file_content), checksfile);
-    }else{
-	console.log('url read');
-	restler.get(url).on('complete', function(result, resp){cf(cheerio.load(result), checksfile); });
-    }
-   
+var cheerioHtmlFile = function(htmlfile) {
+    return cheerio.load(fs.readFileSync(htmlfile));
 };
 
 var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
 };
 
-var checkFile= function(filecontent, checksfile){
-    console.log(checksfile);
-    $ = filecontent;
+var checkHtmlFile = function(content, checksfile) {
+    $ = content;
     var checks = loadChecks(checksfile).sort();
     var out = {};
     for(var ii in checks) {
@@ -67,26 +57,34 @@ var checkFile= function(filecontent, checksfile){
     return out;
 };
 
-var checkHtmlFile = function(htmlfile, url, checksfile) {
-    $ = cheerioHtmlFile(htmlfile, url, checksfile, checkFile);
-};
-
 var clone = function(fn) {
     // Workaround for commander.js issue.
     // http://stackoverflow.com/a/6772648
     return fn.bind({});
 };
 
+var loadAndProcessContent = function(filename, url, callback){
+    if (url == null){
+	// load file
+	callback(cheerioHtmlFile(filename));
+}
+else{
+restler.get(url).on('complete', function (result){ callback(cheerio.load(result));});
+}
+};
+
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
-        .option('-u, --url <url>', 'URL to index.html', null, URL_DEFAULT)
+	.option('-u, --url <url>', 'URL to index.html', null, URL_DEFAULT)
         .parse(process.argv);
- 
-    var checkJson = checkHtmlFile(program.file, program.url, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+
+    loadAndProcessContent(program.file, program.url, function (content){
+	var checkJson = checkHtmlFile(content, program.checks);
+	var outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
+    });
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
